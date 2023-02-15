@@ -1,0 +1,10 @@
+modLoader="javafml" #mandatory
+loaderVersion="[36,)" #mandatory This is typically bumped every Minecraft version by Forge. See our download page for lists of versions.
+license="All rights reserved"
+[[mods]] #mandatory
+modId="renderutil" #mandatory
+version="1.0" #mandatory
+displayName="§a§lRenderUtilities§f" #mandatory
+logoFile="logo.png" #optional
+authors="§a§lsxmurxy§f" #optional
+description='''?'''
