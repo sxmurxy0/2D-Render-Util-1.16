@@ -5,6 +5,7 @@ import static org.lwjgl.opengl.GL11.GL_QUADS;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.FloatBuffer;
 import java.util.stream.Collectors;
 
 import org.lwjgl.opengl.GL30;
@@ -95,19 +96,14 @@ public class Shader implements Wrapper {
         }
     }
     
+    public void setUniformfb(String name, FloatBuffer buffer) {
+    	GL30.glUniform1fv(GL30.glGetUniformLocation(programId, name), buffer);
+    }
+    
     public static void draw() {
-		GL30.glBegin(GL_QUADS);
-		GL30.glTexCoord2d(0, 0);
-		GL30.glVertex2d(0, 0);
-		GL30.glTexCoord2d(0, 1);
-		GL30.glVertex2d(0, WINDOW.getGuiScaledHeight());
-		GL30.glTexCoord2d(1, 1);
-		GL30.glVertex2d(WINDOW.getGuiScaledWidth(), WINDOW.getGuiScaledHeight());
-		GL30.glTexCoord2d(1, 0);
-		GL30.glVertex2d(WINDOW.getGuiScaledWidth(), 0);
-		GL30.glEnd();
+		draw(0, 0, WINDOW.getGuiScaledWidth(), WINDOW.getGuiScaledHeight());
 	}
-	
+    
 	public static void draw(double x, double y, double width, double height) {
 		GL30.glBegin(GL_QUADS);
 		GL30.glTexCoord2d(0, 0);

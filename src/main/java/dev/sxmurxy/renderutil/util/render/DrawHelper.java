@@ -19,6 +19,7 @@ import static org.lwjgl.opengl.GL11.GL_QUADS;
 import static org.lwjgl.opengl.GL11.GL_SCISSOR_TEST;
 import static org.lwjgl.opengl.GL11.GL_SMOOTH;
 import static org.lwjgl.opengl.GL11.GL_SRC_ALPHA;
+import static org.lwjgl.opengl.GL11.GL_STENCIL_TEST;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH;
@@ -44,7 +45,7 @@ import java.util.HashMap;
 
 import dev.sxmurxy.renderutil.Wrapper;
 import dev.sxmurxy.renderutil.util.misc.ColorHelper;
-import dev.sxmurxy.renderutil.util.misc.TextureHelper;
+import dev.sxmurxy.renderutil.util.misc.Utils;
 import net.minecraft.util.ResourceLocation;
 
 public class DrawHelper implements Wrapper {
@@ -53,6 +54,7 @@ public class DrawHelper implements Wrapper {
 	private static final Shader ROUNDED = new Shader("rounded.frag");
     private static final Shader ROUNDED_GRADIENT = new Shader("rounded_gradient.frag");
     private static final Shader ROUNDED_BLURRED = new Shader("rounded_blurred.frag");
+    private static final Shader ROUNDED_BLURRED_GRADIENT = new Shader("rounded_blurred_gradient.frag");
     private static final Shader ROUNDED_OUTLINE = new Shader("rounded_outline.frag");
     private static final Shader ROUNDED_TEXTURE = new Shader("rounded_texture.frag");
 	public static final int STEPS = 60;
@@ -177,6 +179,8 @@ public class DrawHelper implements Wrapper {
 		Color transparent = ColorHelper.injectAlpha(color, 0);
 		
 		drawSetup();
+		glEnable(GL_ALPHA_TEST);
+	    glAlphaFunc(GL_GREATER, 0.0001f);
 		glShadeModel(GL_SMOOTH);
 		applyColor(color);
 		
@@ -203,39 +207,7 @@ public class DrawHelper implements Wrapper {
 		glEnd();
 		
 		glShadeModel(GL_FLAT);
-		drawFinish();
-	}
-	
-	public static void drawRainbowCircle(double x, double y, double radius, double blurRadius) {
-		drawSetup();
-		glShadeModel(GL_SMOOTH);
-		applyColor(Color.WHITE);
-			
-		glBegin(GL_TRIANGLE_FAN);
-		glVertex2d(x, y);
-	    for(int i = 0; i <= EX_STEPS; i++) {
-	    	applyColor(Color.getHSBColor((float)i / EX_STEPS, 1f, 1f));
-	    	glVertex2d(x + radius * Math.sin(EX_ANGLE * i),
-	    					y + radius * Math.cos(EX_ANGLE * i)
-	    	);
-	    }
-	    glEnd();
-	    
-	    glBegin(GL_TRIANGLE_STRIP);
-	    for(int i = 0; i <= EX_STEPS + 1; i++) {
-			if(i % 2 == 1) {
-				applyColor(ColorHelper.injectAlpha(Color.getHSBColor((float)i / EX_STEPS, 1f, 1f), 0));
-				glVertex2d(x + (radius + blurRadius) * Math.sin(EX_ANGLE * i), 
-						y + (radius + blurRadius) * Math.cos(EX_ANGLE * i));
-			} else {
-				applyColor(Color.getHSBColor((float)i / EX_STEPS, 1f, 1f));
-				glVertex2d(x + radius * Math.sin(EX_ANGLE * i), 
-						y + radius * Math.cos(EX_ANGLE * i));
-			}
-		}
-		glEnd();
-		
-		glShadeModel(GL_FLAT);
+		glDisable(GL_ALPHA_TEST);
 		drawFinish();
 	}
 	
@@ -280,6 +252,42 @@ public class DrawHelper implements Wrapper {
 		drawFinish();
 	}
 	
+	public static void drawRainbowCircle(double x, double y, double radius, double blurRadius) {
+		drawSetup();
+		glEnable(GL_ALPHA_TEST);
+	    glAlphaFunc(GL_GREATER, 0.0001f);
+		glShadeModel(GL_SMOOTH);
+		applyColor(Color.WHITE);
+			
+		glBegin(GL_TRIANGLE_FAN);
+		glVertex2d(x, y);
+	    for(int i = 0; i <= EX_STEPS; i++) {
+	    	applyColor(Color.getHSBColor((float)i / EX_STEPS, 1f, 1f));
+	    	glVertex2d(x + radius * Math.sin(EX_ANGLE * i),
+	    					y + radius * Math.cos(EX_ANGLE * i)
+	    	);
+	    }
+	    glEnd();
+	    
+	    glBegin(GL_TRIANGLE_STRIP);
+	    for(int i = 0; i <= EX_STEPS + 1; i++) {
+			if(i % 2 == 1) {
+				applyColor(ColorHelper.injectAlpha(Color.getHSBColor((float)i / EX_STEPS, 1f, 1f), 0));
+				glVertex2d(x + (radius + blurRadius) * Math.sin(EX_ANGLE * i), 
+						y + (radius + blurRadius) * Math.cos(EX_ANGLE * i));
+			} else {
+				applyColor(Color.getHSBColor((float)i / EX_STEPS, 1f, 1f));
+				glVertex2d(x + radius * Math.sin(EX_ANGLE * i), 
+						y + radius * Math.cos(EX_ANGLE * i));
+			}
+		}
+		glEnd();
+		
+		glShadeModel(GL_FLAT);
+		glDisable(GL_ALPHA_TEST);
+		drawFinish();
+	}
+	
 	public static void drawRect(double x, double y, double width, double height, Color color) {
 		drawSetup();
 		applyColor(color);
@@ -299,13 +307,13 @@ public class DrawHelper implements Wrapper {
 		glShadeModel(GL_SMOOTH);
 		
 		glBegin(GL_QUADS);
-		applyColor(clrs[0]);
-		glVertex2d(x, y);
 		applyColor(clrs[1]);
-		glVertex2d(x + width, y);
+		glVertex2d(x, y);
 		applyColor(clrs[2]);
-		glVertex2d(x + width, y - height);
+		glVertex2d(x + width, y);
 		applyColor(clrs[3]);
+		glVertex2d(x + width, y - height);
+		applyColor(clrs[0]);
 		glVertex2d(x, y - height);
 		glEnd();
 		
@@ -353,7 +361,8 @@ public class DrawHelper implements Wrapper {
         float[] c = ColorHelper.getColorComps(color);
         
         drawSetup();
-        glDisable(GL_ALPHA_TEST);
+        glEnable(GL_ALPHA_TEST);
+        glAlphaFunc(GL_GREATER, 0.0001f);
 
         ROUNDED_BLURRED.load();
         ROUNDED_BLURRED.setUniformf("size", (float)(width + 2 * blurR), (float)(height + 2 * blurR));
@@ -362,8 +371,33 @@ public class DrawHelper implements Wrapper {
         ROUNDED_BLURRED.setUniformf("color", c[0], c[1], c[2], c[3]);
         Shader.draw(x - blurR, y - height - blurR, width + blurR * 2, height + blurR * 2);
         ROUNDED_BLURRED.unload();
-
+        
+        glDisable(GL_ALPHA_TEST);
+        drawFinish();
+    }
+	
+	public static void drawRoundedGradientBlurredRect(double x, double y, double width, double height, double roundR, float blurR, Color... colors) {
+		float[] c = ColorHelper.getColorComps(colors[0]);
+        float[] c1 = ColorHelper.getColorComps(colors[1]);
+        float[] c2 = ColorHelper.getColorComps(colors[2]);
+        float[] c3 = ColorHelper.getColorComps(colors[3]);
+        
+        drawSetup();
         glEnable(GL_ALPHA_TEST);
+        glAlphaFunc(GL_GREATER, 0.0001f);
+        
+        ROUNDED_BLURRED_GRADIENT.load();
+        ROUNDED_BLURRED_GRADIENT.setUniformf("size", (float)(width + 2 * blurR), (float)(height + 2 * blurR));
+        ROUNDED_BLURRED_GRADIENT.setUniformf("softness", blurR);
+        ROUNDED_BLURRED_GRADIENT.setUniformf("radius", (float)roundR);
+        ROUNDED_BLURRED_GRADIENT.setUniformf("color1", c[0], c[1], c[2], c[3]);
+        ROUNDED_BLURRED_GRADIENT.setUniformf("color2", c1[0], c1[1], c1[2], c1[3]);
+        ROUNDED_BLURRED_GRADIENT.setUniformf("color3", c2[0], c2[1], c2[2], c2[3]);
+        ROUNDED_BLURRED_GRADIENT.setUniformf("color4", c3[0], c3[1], c3[2], c3[3]);
+        Shader.draw(x - blurR, y - height - blurR, width + blurR * 2, height + blurR * 2);
+        ROUNDED_BLURRED_GRADIENT.unload();
+
+        glDisable(GL_ALPHA_TEST);
         drawFinish();
     }
 	
@@ -380,7 +414,6 @@ public class DrawHelper implements Wrapper {
         ROUNDED_OUTLINE.setUniformf("size", (float)width * 2, (float)height * 2);
         ROUNDED_OUTLINE.setUniformf("round", (float)radius * 2);
         ROUNDED_OUTLINE.setUniformf("thickness", thickness);
-        ROUNDED_OUTLINE.setUniformf("smoothness", thickness - 1.5f, thickness);
         ROUNDED_OUTLINE.setUniformf("color", c[0], c[1], c[2], c[3]);
         Shader.draw(x, y - height, width, height);
         ROUNDED_OUTLINE.unload();
@@ -388,31 +421,15 @@ public class DrawHelper implements Wrapper {
         drawFinish();
     }
 	
-	public static void drawRoundedTexturedRect(ResourceLocation identifier, double x, double y, double width, double height, double radius) {
-		drawRoundedTexturedRect(TextureHelper.getTextureId(identifier), x, y, width, height, radius);
+	public static void drawTexture(ResourceLocation identifier, double x, double y, double width, double height, double texX, double texY, double texWidth, double texHeight) {
+		drawTexture(Utils.getTextureId(identifier), x, y, width, height, texX, texY, texWidth, texHeight);
 	}
 	
-	public static void drawRoundedTexturedRect(int texId, double x, double y, double width, double height, double radius) {
+	public static void drawTexture(int texId, double x, double y, double width, double height, double texX, double texY, double texWidth, double texHeight) {
 		_enableBlend();
 		_blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         resetColor();
         
-        ROUNDED_TEXTURE.load();
-        ROUNDED_TEXTURE.setUniformf("size", (float)width * 2, (float)height * 2);
-        ROUNDED_TEXTURE.setUniformf("round", (float)radius * 2);
-        _bindTexture(texId);
-        Shader.draw(x, y - height, width, height);
-        _bindTexture(0);
-        ROUNDED_TEXTURE.unload();
-        
-        _disableBlend();
-	}
-	
-	public static void drawTexture(ResourceLocation identifier, double x, double y, double width, double height, double texX, double texY, double texWidth, double texHeight) {
-		drawTexture(TextureHelper.getTextureId(identifier), x, y, width, height, texX, texY, texWidth, texHeight);
-	}
-	
-	public static void drawTexture(int texId, double x, double y, double width, double height, double texX, double texY, double texWidth, double texHeight) {
 		_bindTexture(texId);
 		
 		int iWidth = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH);
@@ -423,10 +440,6 @@ public class DrawHelper implements Wrapper {
 		texWidth = texWidth / iWidth;
 		texHeight = texHeight / iHeight;
 		
-		_enableBlend();
-		_blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        resetColor();
-        
         glBegin(GL_QUADS);
 		glTexCoord2d(texX, texY);
 		glVertex2d(x, y);
@@ -442,11 +455,75 @@ public class DrawHelper implements Wrapper {
         _disableBlend();
 	}
 	
+	public static void drawRoundedTexture(ResourceLocation identifier, double x, double y, double width, double height, double texX, double texY, double texWidth, double texHeight, double radius) {
+		drawRoundedTexture(Utils.getTextureId(identifier), x, y, width, height, texX, texY, texWidth, texHeight, radius);
+	}
+	
+	public static void drawRoundedTexture(int texId, double x, double y, double width, double height, double texX, double texY, double texWidth, double texHeight, double radius) {
+		_enableBlend();
+		_blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		
+		glEnable(GL_ALPHA_TEST);
+		glAlphaFunc(GL_GREATER, 0.3f);
+		
+		MC.getMainRenderTarget().bindWrite(false);
+		Utils.initStencilReplace();
+		drawRoundedRect(x, y, width, height, radius, Color.WHITE);
+		Utils.uninitStencilReplace();
+		
+        _bindTexture(texId);
+        
+        int iWidth = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH);
+		int iHeight = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT);
+		y -= height;
+		texX = texX / iWidth;
+		texY = texY / iHeight;
+		texWidth = texWidth / iWidth;
+		texHeight = texHeight / iHeight;
+        
+        glBegin(GL_QUADS);
+ 		glTexCoord2d(texX, texY);
+ 		glVertex2d(x, y);
+ 		glTexCoord2d(texX, texY + texHeight);
+ 		glVertex2d(x, y + height);
+ 		glTexCoord2d(texX + texWidth, texY + texHeight);
+ 		glVertex2d(x + width, y + height);
+ 		glTexCoord2d(texX + texWidth, texY);
+ 		glVertex2d(x + width, y);
+ 		glEnd();
+ 		
+         _bindTexture(0);
+         glDisable(GL_STENCIL_TEST);
+        glDisable(GL_ALPHA_TEST);
+        _disableBlend();
+	}
+	
+	public static void drawRoundedTexture(ResourceLocation identifier, double x, double y, double width, double height, double radius) {
+		drawRoundedTexture(Utils.getTextureId(identifier), x, y, width, height, radius);
+	}
+	
+	public static void drawRoundedTexture(int texId, double x, double y, double width, double height, double radius) {
+		_enableBlend();
+		_blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        resetColor();
+        
+        ROUNDED_TEXTURE.load();
+        ROUNDED_TEXTURE.setUniformf("size", (float)width * 2, (float)height * 2);
+        ROUNDED_TEXTURE.setUniformf("round", (float)radius * 2);
+        _bindTexture(texId);
+        Shader.draw(x, y - height, width, height);
+        _bindTexture(0);
+        ROUNDED_TEXTURE.unload();
+        
+        _disableBlend();
+	}
+	
 	public static void drawGlow(double x, double y, int width, int height, int glowRadius, Color color) {
 		_enableBlend();
 		_blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glEnable(GL_ALPHA_TEST);
-        glAlphaFunc(GL_GREATER, 0.001f);
+		
+		glEnable(GL_ALPHA_TEST);
+        glAlphaFunc(GL_GREATER, 0.0001f);
 
 		_bindTexture(getGlowTexture(width, height, glowRadius));
 		width += glowRadius * 2;
@@ -472,9 +549,9 @@ public class DrawHelper implements Wrapper {
     }
 	
 	public static int getGlowTexture(int width, int height, int blurRadius) {
-		int identifier = (int)(height * blurRadius + Math.pow(blurRadius, 2) * width + height);
+		int identifier = (width * 401 + height) * 407 + blurRadius;
 		int texId = glowCache.getOrDefault(identifier, -1);
-        
+		
         if(texId == -1) {
             BufferedImage original = new BufferedImage((int)(width + blurRadius * 2), (int)(height + blurRadius * 2), BufferedImage.TYPE_INT_ARGB_PRE);
 
@@ -483,10 +560,10 @@ public class DrawHelper implements Wrapper {
             g.fillRect(blurRadius, blurRadius, (int)width, (int)height);
             g.dispose();
 
-            GlowFilter shadowed = new GlowFilter(blurRadius);
-            BufferedImage blurred = shadowed.filter(original, null);
+            GlowFilter glow = new GlowFilter(blurRadius);
+            BufferedImage blurred = glow.filter(original, null);
             try {
-    			texId = TextureHelper.loadTexture(blurred);
+    			texId = Utils.loadTexture(blurred);
     			glowCache.put(identifier, texId);
     		} catch (Exception e) {
     			e.printStackTrace();

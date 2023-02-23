@@ -1,168 +1,80 @@
 package dev.sxmurxy.renderutil.util.render;
 
-import java.awt.Color;
-import java.nio.FloatBuffer;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
-import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
+import com.google.common.collect.Queues;
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.systems.IRenderCall;
 
 import dev.sxmurxy.renderutil.Wrapper;
+import dev.sxmurxy.renderutil.util.misc.Utils;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 
 public class BlurHelper implements Wrapper {
 
-    private static final Shader BLUR_SHADER = new Shader("gaussian_blur.frag");
-    private static final HashMap<Integer, FloatBuffer> weightCache = new HashMap<>();
-    private static final Framebuffer frameBuffer = new Framebuffer(1, 1, true, true);
-
-    private static void setupUniforms(float dir1, float dir2, int radius) {
-        BLUR_SHADER.setUniformi("textureIn", 0);
-        BLUR_SHADER.setUniformf("texelSize", 1.0F / (float)WINDOW.getGuiScaledWidth(), 1.0F / (float)WINDOW.getGuiScaledHeight());
-        BLUR_SHADER.setUniformf("direction", dir1, dir2);
-        BLUR_SHADER.setUniformf("radius", radius);
-      
-        FloatBuffer weightBuffer = weightCache.get(radius);
-        if(weightBuffer == null) {
-        	weightBuffer = BufferUtils.createFloatBuffer(256);
-	        for (int i = 0; i <= radius; i++) {
-	            weightBuffer.put(calculateGaussianValue(i, radius / 2f));
-	        }
-	        weightBuffer.rewind();
-	        weightCache.put(radius, weightBuffer);
-        }
-        GL30.glUniform1fv(BLUR_SHADER.getUniform("weights"), weightBuffer);
+    private static final Shader blur = new Shader("blur.frag");
+    private static final ConcurrentLinkedQueue<IRenderCall> renderQueue = Queues.newConcurrentLinkedQueue();
+    private static final Framebuffer inFrameBuffer = new Framebuffer((int)(WINDOW.getWidth() / 2d), (int)(WINDOW.getHeight() / 2d), true, Minecraft.ON_OSX);
+    private static final Framebuffer outFrameBuffer = new Framebuffer((int)(WINDOW.getWidth() / 2d), (int)(WINDOW.getHeight() / 2d), true, Minecraft.ON_OSX);
+    
+    public static void registerRenderCall(IRenderCall rc) {
+    	renderQueue.add(rc);
     }
     
-    public static Framebuffer setupBuffer(Framebuffer frameBuffer) {
-        if(frameBuffer.width != WINDOW.getGuiScaledWidth() || frameBuffer.height != WINDOW.getGuiScaledHeight()) {
-    		frameBuffer.destroyBuffers();
-        	frameBuffer.createBuffers(WINDOW.getGuiScaledWidth() , WINDOW.getGuiScaledHeight(), true);
-        }
-        return frameBuffer;
+    public static void draw(int radius) {
+    	if(renderQueue.isEmpty())
+			return;
+    	
+    	setupBuffer(inFrameBuffer);
+    	setupBuffer(outFrameBuffer);
+    	
+    	inFrameBuffer.bindWrite(true);
+    	
+    	while(!renderQueue.isEmpty()) {
+    		renderQueue.poll().execute();
+    	}
+    	
+    	outFrameBuffer.bindWrite(true);
+    	
+    	blur.load();
+    	blur.setUniformf("radius", radius);
+    	blur.setUniformi("sampler1", 0);
+    	blur.setUniformi("sampler2", 20);
+    	blur.setUniformfb("kernel", Utils.getKernel(radius));
+        blur.setUniformf("texelSize", 1.0F / (float)WINDOW.getWidth(), 1.0F / (float)WINDOW.getHeight());
+        blur.setUniformf("direction", 2.0F, 0.0F);
+
+        GlStateManager._disableBlend();
+        GlStateManager._blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+	    MC.getMainRenderTarget().bindRead();
+	    Shader.draw();
+    	
+	    MC.getMainRenderTarget().bindWrite(true);
+	    
+	    blur.setUniformf("direction", 0.0F, 2.0F);
+	    
+	    outFrameBuffer.bindRead();
+	    GL30.glActiveTexture(GL30.GL_TEXTURE20);
+	    inFrameBuffer.bindRead();
+	    GL30.glActiveTexture(GL30.GL_TEXTURE0);
+	    Shader.draw();
+	    
+	    blur.unload();
+	    inFrameBuffer.unbindRead();
+	    GlStateManager._disableBlend();
     }
-	
-	public static float calculateGaussianValue(float x, float sigma) {
-        double output = 1.0 / Math.sqrt(2.0 * Math.PI * (sigma * sigma));
-        return (float)(output * Math.exp(-(x * x) / (2.0 * (sigma * sigma))));
+    
+    private static Framebuffer setupBuffer(Framebuffer frameBuffer) {
+    	if(frameBuffer.width != (int)(WINDOW.getWidth() / 2d) || frameBuffer.height != (int)(WINDOW.getHeight() / 2d)) 
+			frameBuffer.resize((int)(WINDOW.getWidth() / 2d), (int)(WINDOW.getHeight() / 2d), Minecraft.ON_OSX);
+		else 
+			frameBuffer.clear(Minecraft.ON_OSX);
+		
+		return frameBuffer;
 	}
     
-    public static void drawBlur(int radius) {
-    	GlStateManager._enableBlend();
-        GlStateManager._blendFunc(GL30.GL_SRC_ALPHA, GL30.GL_ONE_MINUS_SRC_ALPHA);
-       
-        setupBuffer(frameBuffer);
-        frameBuffer.clear(true);
-		
-		frameBuffer.bindWrite(false);
-		BLUR_SHADER.load();
-		setupUniforms(0, 1, radius);
-		GlStateManager._bindTexture(MC.getMainRenderTarget().getColorTextureId());
-		Shader.draw();
-		BLUR_SHADER.unload();
-		frameBuffer.unbindWrite();
-
-		MC.getMainRenderTarget().bindWrite(true);
-		BLUR_SHADER.load();
-		setupUniforms(1, 0, radius);
-		GlStateManager._bindTexture(frameBuffer.getColorTextureId());
-		Shader.draw();
-		BLUR_SHADER.unload();
-		
-		GlStateManager._bindTexture(0);
-		GlStateManager._disableBlend();
-    }
-    
-    public static void drawBlur(double x, double y, double width, double height, int radius) {
-    	GlStateManager._enableBlend();
-        GlStateManager._blendFunc(GL30.GL_SRC_ALPHA, GL30.GL_ONE_MINUS_SRC_ALPHA);
-        
-    	MC.getMainRenderTarget().bindWrite(true);
-    	MC.getMainRenderTarget().enableStencil();
-    	
-        GL30.glEnable(GL30.GL_STENCIL_TEST);
-        GL30.glClear(GL30.GL_STENCIL_BUFFER_BIT);
-        GlStateManager._stencilFunc(GL30.GL_EQUAL, 1, 1);
-        GlStateManager._stencilOp(GL30.GL_REPLACE, GL30.GL_REPLACE, GL30.GL_REPLACE);
-        GlStateManager._colorMask(false, false, false, false);
-        
-        DrawHelper.drawRect(x, y, width, height, Color.WHITE);
-        
-        GlStateManager._colorMask(true, true, true, true);
-        GlStateManager._stencilFunc(GL30.GL_EQUAL, 1, 1);
-        GlStateManager._stencilOp(GL30.GL_KEEP, GL30.GL_KEEP, GL30.GL_KEEP);
-        
-    	MC.getMainRenderTarget().unbindWrite();
-        
-    	setupBuffer(frameBuffer);
-        frameBuffer.clear(true);
-		
-		frameBuffer.bindWrite(false);
-		BLUR_SHADER.load();
-		setupUniforms(0, 1, radius);
-		GlStateManager._bindTexture(MC.getMainRenderTarget().getColorTextureId());
-		Shader.draw();
-		BLUR_SHADER.unload();
-		frameBuffer.unbindWrite();
-		
-		MC.getMainRenderTarget().bindWrite(true);
-		BLUR_SHADER.load();
-		setupUniforms(1, 0, radius);
-		GlStateManager._bindTexture(frameBuffer.getColorTextureId());
-		Shader.draw();
-		BLUR_SHADER.unload();
-		
-		GlStateManager._bindTexture(0);
-		GL30.glDisable(GL30.GL_STENCIL_TEST);
-		GlStateManager._disableBlend();
-    }
-    
-    public static void drawRoundedBlur(double x, double y, double width, double height, double rRadius, int bRadius) {
-    	GlStateManager._enableBlend();
-        GlStateManager._blendFunc(GL30.GL_SRC_ALPHA, GL30.GL_ONE_MINUS_SRC_ALPHA);
-        GL30.glEnable(GL30.GL_STENCIL_TEST);
-        GL30.glClear(GL30.GL_STENCIL_BUFFER_BIT);
-        GL30.glEnable(GL30.GL_ALPHA_TEST);
-        
-    	MC.getMainRenderTarget().bindWrite(true);
-    	MC.getMainRenderTarget().enableStencil();
-    	
-        GlStateManager._stencilFunc(GL30.GL_EQUAL, 1, 1);
-        GlStateManager._stencilOp(GL30.GL_REPLACE, GL30.GL_REPLACE, GL30.GL_REPLACE);
-        GlStateManager._colorMask(false, false, false, false);
-        
-        DrawHelper.drawRoundedRect(x, y, width, height, rRadius, Color.WHITE);
-        
-        GlStateManager._colorMask(true, true, true, true);
-        GlStateManager._stencilFunc(GL30.GL_EQUAL, 1, 1);
-        GlStateManager._stencilOp(GL30.GL_KEEP, GL30.GL_KEEP, GL30.GL_KEEP);
-        
-    	MC.getMainRenderTarget().unbindWrite();
-        
-    	setupBuffer(frameBuffer);
-        frameBuffer.clear(true);
-		
-		frameBuffer.bindWrite(false);
-		BLUR_SHADER.load();
-		setupUniforms(0, 1, bRadius);
-		GlStateManager._bindTexture(MC.getMainRenderTarget().getColorTextureId());
-		Shader.draw();
-		BLUR_SHADER.unload();
-		frameBuffer.unbindWrite();
-		
-		MC.getMainRenderTarget().bindWrite(true);
-		BLUR_SHADER.load();
-		setupUniforms(1, 0, bRadius);
-		GlStateManager._bindTexture(frameBuffer.getColorTextureId());
-		Shader.draw();
-		BLUR_SHADER.unload();
-		
-		GlStateManager._bindTexture(0);
-		GL30.glDisable(GL30.GL_ALPHA_TEST);
-		GL30.glDisable(GL30.GL_STENCIL_TEST);
-		GlStateManager._disableBlend();
-    }
-
 }
